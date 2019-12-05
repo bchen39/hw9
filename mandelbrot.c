@@ -12,12 +12,11 @@
 #include "mandelbrot.h"
 #include "parameters.h"
 
-uint32_t *iterations(struct parameters params, __m256d p_real, __m256d p_imag) {
+uint32_t *iterations(struct parameters params, __m256d p_real, __m256d p_imag, double* comp, uint32_t* res) {
     __m256d real = _mm256_setzero_pd(), imag = _mm256_setzero_pd();
     __m256d th = _mm256_set1_pd(params.threshold * params.threshold);
     __m256d curr, real_prev;
     int i;
-    uint32_t *res = malloc(4 * sizeof(uint32_t));
     for (i = 0; i < 4; i++) {
     	*(res + i) = 0;
     }
@@ -26,14 +25,12 @@ uint32_t *iterations(struct parameters params, __m256d p_real, __m256d p_imag) {
         real = _mm256_sub_pd(_mm256_add_pd(_mm256_mul_pd(real, real), p_real), _mm256_mul_pd(imag, imag));
         imag = _mm256_add_pd(_mm256_mul_pd(_mm256_mul_pd(real_prev, imag), _mm256_set1_pd(2)), p_imag);
         curr = _mm256_add_pd(_mm256_mul_pd(real, real), _mm256_mul_pd(imag, imag));
-	double *comp = malloc(4 * sizeof(double));
         _mm256_storeu_pd(comp, _mm256_cmp_pd(curr, th, 13));
         for (int j = 0; j < 4; j++) {
             if (*(comp + j) != 0) {
                 *(res + j) = 1;
             }
         }
-	free(comp);
     }
     return res;
 }
@@ -52,30 +49,39 @@ uint32_t iteration(struct parameters params, double complex point) {
 void mandelbrot(struct parameters params, double scale, int32_t *num_pixels_in_set) {
     int32_t num_zero_pixels = 0;
     __m256d p_real, p_imag;
-    #pragma omp parallel for
+    #pragma omp parallel
+    {
+    double *comp = malloc(4 * sizeof(double));
+    uint32_t *res = malloc(4 * sizeof(uint32_t));
+    #pragma omp for
     for (int i = params.resolution; i >= -params.resolution; i--) {
         for (int j = -params.resolution; j <= params.resolution - 4; j = j + 4) {
             p_real = _mm256_add_pd(_mm256_set1_pd(creal(params.center)),
                         _mm256_set_pd(j*scale/params.resolution, (j+1)*scale/params.resolution, (j+2)*scale/params.resolution, (j+3)*scale/params.resolution));
             p_imag = _mm256_add_pd(_mm256_set1_pd(cimag(params.center)), _mm256_set1_pd(i * scale / params.resolution));
-            uint32_t *res = iterations(params, p_real, p_imag);
-            #pragma omp critical
+            res = iterations(params, p_real, p_imag, comp, res);
+
             for (int i = 0; i < 4; i++) {
                 if (*(res + i) == 0) {
+                  #pragma omp critical
                     num_zero_pixels++;
                 }
             }
-	    free(res);
         }
         for (int j = -params.resolution + 4 * ((2 * params.resolution) / 4); j <= params.resolution; j++) {
             double complex point = (params.center +
                     j * scale / params.resolution +
                     i * scale / params.resolution * I);
-            #pragma omp critical
+
             if (iteration(params, point) == 0) {
+              #pragma omp critical
                 num_zero_pixels++;
             }
         }
     }
+    free(res);
+    free(comp);
+  }
     *num_pixels_in_set = num_zero_pixels;
 }
+
