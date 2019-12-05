@@ -18,7 +18,7 @@ uint32_t *iterations(struct parameters params, __m256d p_real, __m256d p_imag) {
     __m256d curr;
     uint32_t res[4] = {0, 0, 0, 0}; 
     for (int i = 1; i <= params.maxiters; i++) {
-        real = _mm256_sub_ps(_mm256_add_pd(_mm256_mul_pd(real, real), p_real), _mm256_mul_pd(imag, imag));
+        real = _mm256_sub_pd(_mm256_add_pd(_mm256_mul_pd(real, real), p_real), _mm256_mul_pd(imag, imag));
         imag = _mm256_add_pd(_mm256_mul_pd(_mm256_mul_pd(real, imag), _mm256_set1_pd(2)), p_imag);
         curr = _mm256_add_pd(_mm256_mul_pd(real, real), _mm256_mul_pd(imag, imag));
         double *comp;
