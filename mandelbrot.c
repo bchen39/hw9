@@ -29,7 +29,7 @@ uint32_t *iterations(struct parameters params, __m256d p_real, __m256d p_imag) {
                 *(res + i) = 1;
             }
         }
-        free(double);
+        free(comp);
     }
     return res;
 }
