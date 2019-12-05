@@ -17,12 +17,12 @@ uint32_t *iterations(struct parameters params, __m256d p_real, __m256d p_imag) {
     __m256d th = _mm256_set1_pd(params.threshold * params.threshold);
     __m256d curr;
     uint32_t res[4] = {0, 0, 0, 0}; 
-    #pragma omp parallel for
     for (int i = 1; i <= params.maxiters; i++) {
         real = _mm256_add_pd(_mm256_mul_pd(real, real), p_real);
         imag = _mm256_add_pd(_mm256_mul_pd(imag, imag), p_imag);
         curr = _mm256_add_pd(_mm256_mul_pd(real, real), _mm256_mul_pd(imag, imag));
-        uint64_t * comp = _mm256_cmp_pd(curr, th);
+        double *comp;
+        _mm256_storeu_pd (comp, _mm256_cmp_pd(curr, th, 13));
         for (int i = 0; i < 4; i++) {
             if (*(comp + i) == 0) {
                 *(res + i)++;
@@ -34,7 +34,6 @@ uint32_t *iterations(struct parameters params, __m256d p_real, __m256d p_imag) {
 
 uint32_t iterations(struct parameters params, double complex point) {
     double complex z = 0;
-    #pragma omp parallel for
     for (int i = 1; i <= params.maxiters; i++) {
         z = z * z + point;
         if (creal(z) * creal(z) + cimag(z) * cimag(z) >= params.threshold * params.threshold) {
@@ -54,6 +53,7 @@ void mandelbrot(struct parameters params, double scale, int32_t *num_pixels_in_s
             __m256d p_real = _mm256_loadu_pd ((__m256d *) real_arr);
             __m256d p_imag = _mm256_loadu_pd ((__m256d *) imag_arr);
             uint32_t *res = iterations(params, real, imag);
+            #pragma omp critical
             for (int i = 0; i < 4; i++) {
                 if (*(res + i) == 0) {
                     num_zero_pixels++;
@@ -64,6 +64,7 @@ void mandelbrot(struct parameters params, double scale, int32_t *num_pixels_in_s
             double complex point = (params.center +
                     j * scale / params.resolution +
                     i * scale / params.resolution * I);
+            #pragma omp critical
             if (iterations(params, point) == 0) {
                 num_zero_pixels++;
             }
