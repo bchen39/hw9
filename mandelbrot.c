@@ -54,13 +54,15 @@ void mandelbrot(struct parameters params, double scale, int32_t *num_pixels_in_s
             double complex imag_arr[4] = {cimag(params.center) + i * scale / params.resolution * I, cimag(params.center) + (i + 1) * scale / params.resolution * I, cimag(params.center) + (i + 2) * scale / params.resolution * I, cimag(params.center) + (i + 3) * scale / params.resolution * I};
             __m256d p_real = _mm256_loadu_pd((__m256d *) real_arr);
             __m256d p_imag = _mm256_loadu_pd((__m256d *) imag_arr);
-            uint32_t res[4] = iterations(params, p_real, p_imag);
+            uint32_t *res = malloc(4 * sizeof(uint32_t));
+            res = iterations(params, p_real, p_imag);
             #pragma omp critical
             for (int i = 0; i < 4; i++) {
                 if (*(res + i) == 0) {
                     num_zero_pixels++;
                 }
             }
+            free(res);
         }
         for (int j = -params.resolution + 4 * ((2 * params.resolution) / 4); j <= params.resolution; j++) {
             double complex point = (params.center +
