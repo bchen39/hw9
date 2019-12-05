@@ -18,16 +18,18 @@ uint32_t *iterations(struct parameters params, __m256d p_real, __m256d p_imag) {
     __m256d curr;
     uint32_t res[4] = {0, 0, 0, 0}; 
     for (int i = 1; i <= params.maxiters; i++) {
+        __m256d real_prev = real;
         real = _mm256_sub_pd(_mm256_add_pd(_mm256_mul_pd(real, real), p_real), _mm256_mul_pd(imag, imag));
-        imag = _mm256_add_pd(_mm256_mul_pd(_mm256_mul_pd(real, imag), _mm256_set1_pd(2)), p_imag);
+        imag = _mm256_add_pd(_mm256_mul_pd(_mm256_mul_pd(real_prev, imag), _mm256_set1_pd(2)), p_imag);
         curr = _mm256_add_pd(_mm256_mul_pd(real, real), _mm256_mul_pd(imag, imag));
-        double *comp;
+        double *comp = malloc(4 * sizeof(double));
         _mm256_storeu_pd (comp, _mm256_cmp_pd(curr, th, 13));
         for (int i = 0; i < 4; i++) {
-            if (*(comp + i * sizeof(double)) == 0) {
-                *(res + i * sizeof(uint32_t)) = 1;
+            if (*(comp + i) == 0) {
+                *(res + i) = 1;
             }
         }
+        free(double);
     }
     return res;
 }
@@ -55,7 +57,7 @@ void mandelbrot(struct parameters params, double scale, int32_t *num_pixels_in_s
             uint32_t *res = iterations(params, p_real, p_imag);
             #pragma omp critical
             for (int i = 0; i < 4; i++) {
-                if (*(res + i * sizeof(uint32_t)) == 0) {
+                if (*(res + i) == 0) {
                     num_zero_pixels++;
                 }
             }
