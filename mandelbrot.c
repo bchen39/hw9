@@ -12,14 +12,11 @@
 #include "mandelbrot.h"
 #include "parameters.h"
 
-uint32_t *iterations(struct parameters params, __m256d p_real, __m256d p_imag, double* comp, uint32_t* res) {
+void iterations(struct parameters params, __m256d p_real, __m256d p_imag, double* comp, uint32_t* res) {
     __m256d real = _mm256_setzero_pd(), imag = _mm256_setzero_pd();
     __m256d th = _mm256_set1_pd(params.threshold * params.threshold);
     __m256d curr, real_prev;
-    int i;
-    for (i = 0; i < 4; i++) {
-    	*(res + i) = 0;
-    }
+    int i, no_zero = 1;
     for (i = 1; i <= params.maxiters; i++) {
         real_prev = real;
         real = _mm256_sub_pd(_mm256_add_pd(_mm256_mul_pd(real, real), p_real), _mm256_mul_pd(imag, imag));
@@ -29,21 +26,15 @@ uint32_t *iterations(struct parameters params, __m256d p_real, __m256d p_imag, d
         for (int j = 0; j < 4; j++) {
             if (*(comp + j) != 0) {
                 *(res + j) = 1;
-            }
+            } else {
+		no_zero = 0;
+	    }
         }
+	if (no_zero == 1) {
+	    return;
+	}
+	no_zero = 1;
     }
-    return res;
-}
-
-uint32_t iteration(struct parameters params, double complex point) {
-    double complex z = 0;
-    for (int i = 1; i <= params.maxiters; i++) {
-        z = z * z + point;
-        if (creal(z) * creal(z) + cimag(z) * cimag(z) >= params.threshold * params.threshold) {
-            return i;
-        }
-    }
-    return 0;
 }
 
 void mandelbrot(struct parameters params, double scale, int32_t *num_pixels_in_set) {
@@ -59,11 +50,13 @@ void mandelbrot(struct parameters params, double scale, int32_t *num_pixels_in_s
             p_real = _mm256_add_pd(_mm256_set1_pd(creal(params.center)),
                         _mm256_set_pd(j*scale/params.resolution, (j+1)*scale/params.resolution, (j+2)*scale/params.resolution, (j+3)*scale/params.resolution));
             p_imag = _mm256_add_pd(_mm256_set1_pd(cimag(params.center)), _mm256_set1_pd(i * scale / params.resolution));
-            res = iterations(params, p_real, p_imag, comp, res);
-
+	    for (int k = 0; k < 4; k++) {
+	    	*(res + k) = 0;
+	    }
+            iterations(params, p_real, p_imag, comp, res);
             for (int i = 0; i < 4; i++) {
                 if (*(res + i) == 0) {
-                  #pragma omp critical
+                    #pragma omp critical
                     num_zero_pixels++;
                 }
             }
@@ -71,10 +64,17 @@ void mandelbrot(struct parameters params, double scale, int32_t *num_pixels_in_s
         for (int j = -params.resolution + 4 * ((2 * params.resolution) / 4); j <= params.resolution; j++) {
             double complex point = (params.center +
                     j * scale / params.resolution +
-                    i * scale / params.resolution * I);
-
-            if (iteration(params, point) == 0) {
-              #pragma omp critical
+                    i * scale / params.resolution * I), z = 0;
+	    int zero = 1;
+	    for (int k = 1; k <= params.maxiters; k++) {
+		z = z * z + point;
+		if (creal(z) * creal(z) + cimag(z) * cimag(z) >= params.threshold * params.threshold) {
+            	    zero = 0;
+		    break;
+        	}
+	    }
+            if (zero == 1) {
+                #pragma omp critical
                 num_zero_pixels++;
             }
         }
